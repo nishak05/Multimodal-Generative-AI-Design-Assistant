@@ -17,42 +17,77 @@ def _load_font(font_path, size):
 def draw_text_with_shadow(draw, position, text, font, fill):
     x, y = position
     # draw shadow
-    shadow_color = (0, 0, 0, 180)
+    shadow_color = (0, 0, 0)
     try:
-        draw.text((x+2, y+2), text, font=font, fill=shadow_color)
+        draw.text((x+3, y+3), text, font=font, fill=shadow_color)
     except Exception:
         pass
     # draw text
     draw.text((x, y), text, font=font, fill=fill)
 
-def overlay_text(img, title="TITLE", subtitle="", font_path=None, text_color="#FFFFFF"):
+def get_average_brightness(image, box):
+    crop = image.crop(box).convert("L")  # grayscale
+    pixels = list(crop.getdata())
+    if not pixels:
+        return 255
+    return sum(pixels) / len(pixels)
+
+def get_text_size(draw, text, font):
+    bbox = draw.textbbox((0, 0), text, font=font)
+    width = bbox[2] - bbox[0]
+    height = bbox[3] - bbox[1]
+    return width, height
+
+def overlay_text(img, title="TITLE", subtitle="", title_font_path=None, subtitle_font_path=None, text_color="#FFFFFF"):
     if isinstance(img, str):
         img = Image.open(img)
 
+    
     image = img.convert("RGBA")
     draw = ImageDraw.Draw(image)
     w, h = image.size
 
     # Choose font sizes relative to image height
-    title_size = max(24, int(h * 0.09))
-    sub_size = max(16, int(h * 0.04))
+    title_size = int(h * 0.10)
+    sub_size = int(h * 0.045)
 
-    title_font = _load_font(font_path, title_size)
-    sub_font = _load_font(font_path, sub_size)
+    title_font = _load_font(title_font_path, title_size)
+    sub_font = _load_font(subtitle_font_path, sub_size)
+
 
     # compute positions (centered)
     title_text = title or ""
     subtitle_text = subtitle or ""
 
     # Title (near top center)
-    tw, th = draw.textsize(title_text, font=title_font)
+    tw, th = get_text_size(draw, title_text, title_font)
     title_x = max(10, (w - tw) / 2)
     title_y = int(h * 0.08)
 
     # Subtitle (near bottom center)
-    sw, sh = draw.textsize(subtitle_text, font=sub_font)
+    sw, sh = get_text_size(draw, subtitle_text, sub_font)
     sub_x = max(10, (w - sw) / 2)
     sub_y = int(h * 0.82)
+
+    pad = int(th * 0.8)
+    title_box = (
+        max(0, int(title_x - pad)),
+        max(0, int(title_y - pad)),
+        min(w, int(title_x + tw + pad)),
+        min(h, int(title_y + th + pad))
+    )
+
+    brightness = get_average_brightness(image.convert("RGB"), title_box)
+
+    # choose text color
+    if brightness < 145:
+        text_color = "white"
+    else:
+        text_color = "black"
+
+    print("Title size:", title_size, "Subtitle size:", sub_size)
+    print("Brightness:", brightness)
+    print("Image size:", image.size)
 
     # Draw text with shadow for readability
     try:

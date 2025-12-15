@@ -1,6 +1,14 @@
+import sys
+import os
+import time
+
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if ROOT_DIR not in sys.path:
+    sys.path.append(ROOT_DIR)
+
+# frontend
 import streamlit as st
 from PIL import Image
-import os
 from backend.postprocessing import overlay_text
 
 st.set_page_config(page_title="AI Creative Design Copilot (MVP)", layout="centered")
@@ -10,6 +18,27 @@ prompt = st.text_input("Prompt (used for background generation in Colab/Server):
                        "Retro neon poster background, synthwave city skyline, pink and blue lights")
 title = st.text_input("Title", "TECH FEST 2025")
 subtitle = st.text_input("Subtitle", "Workshops • Hackathons • Talks")
+
+FONT_OPTIONS = {
+    "Montserrat (Bold)": "assets/fonts/Montserrat-Bold.ttf",
+    "Montserrat (Regular)": "assets/fonts/Montserrat-Regular.ttf",
+    "Montserrat (semiBold)": "assets/fonts/Montserrat-SemiBold.ttf",
+    "Roboto (mediumItalic)": "assets/fonts/Roboto_Condensed-MediumItalic.ttf",
+    "Roboto (regular)": "assets/fonts/Roboto_Condensed-Regular.ttf",
+}
+font_name = st.selectbox(
+    "Choose Title font style",
+    options=list(FONT_OPTIONS.keys())
+)
+
+sub_font_name = st.selectbox(
+    "Choose Subtitle font style",
+    options=list(FONT_OPTIONS.keys())
+)
+
+title_font_path = FONT_OPTIONS[font_name]
+subtitle_font_path = FONT_OPTIONS[sub_font_name]
+
 
 st.write("This demo uses pre-generated backgrounds (from Colab). Generate in Colab and save to `assets/sample_images/`.")
 
@@ -26,10 +55,13 @@ if images:
     if st.button("Apply text & Show"):
         img_path = os.path.join(img_dir, selected)
         img = Image.open(img_path)
-        out = overlay_text(img, title=title, subtitle=subtitle)
+        out = overlay_text(img, title=title, subtitle=subtitle, title_font_path=title_font_path, subtitle_font_path=subtitle_font_path)
         st.image(out, use_column_width=True)
         # Allow download
-        out_path = os.path.join(img_dir, f"composed_{selected}")
+        output_dir = "assets/outputs"
+        os.makedirs(output_dir, exist_ok=True)
+        filename = f"composed_{int(time.time())}.png"
+        out_path = os.path.join(output_dir, filename)
         out.save(out_path)
         with open(out_path, "rb") as f:
             st.download_button("Download composed PNG", f.read(), file_name=f"composed_{selected}")
