@@ -85,10 +85,6 @@ def overlay_text(img, title="TITLE", subtitle="", title_font_path=None, subtitle
     else:
         text_color = "black"
 
-    print("Title size:", title_size, "Subtitle size:", sub_size)
-    print("Brightness:", brightness)
-    print("Image size:", image.size)
-
     # Draw text with shadow for readability
     try:
         draw_text_with_shadow(draw, (title_x, title_y), title_text, title_font, text_color)
