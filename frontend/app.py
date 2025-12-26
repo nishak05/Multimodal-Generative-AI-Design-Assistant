@@ -10,7 +10,7 @@ if ROOT_DIR not in sys.path:
 # frontend
 import streamlit as st
 from PIL import Image
-from backend.postprocessing import overlay_text, save_layout_metadata, export_for_platforms
+from backend.postprocessing import overlay_text, save_layout_metadata, export_with_text
 from backend.models import VARIANTS 
 # from backend.models import generate_background_from_prompt_api (.. for API version)
 
@@ -94,6 +94,12 @@ sub_font_name = st.sidebar.selectbox(
 title_font_path = FONT_OPTIONS[font_name]
 subtitle_font_path = FONT_OPTIONS[sub_font_name]
 
+
+st.sidebar.markdown(
+    "<small style='color:#9ca3af;'>Font changes apply on the next Generate.</small>",
+    unsafe_allow_html=True
+)
+
 st.sidebar.divider()
 st.sidebar.subheader("Background")
 
@@ -130,15 +136,19 @@ img = None
 #             st.session_state.generated_bg = False
 
 if generate:
+    st.session_state.generated_variants = []
     if selected == "(Generate from prompt)":
         # Day-12 stub: prompt-based generation is disabled
         st.info("Prompt-based background generation is currently disabled for demo stability.")
         st.info("Please select a sample background image.")
+        st.stop()
     else:
         img_path = os.path.join(img_dir, selected)
         img = Image.open(img_path)
     if img is not None:
         variants = []
+
+        st.session_state.base_background = img.copy()
 
         for variant in VARIANTS:
             out, meta = overlay_text(
@@ -149,7 +159,13 @@ if generate:
                 subtitle_font_path=subtitle_font_path,
                 variant=variant
             )
-            variants.append((variant["name"], out, meta))
+            variants.append({
+                "name": variant["name"],
+                "image": out,          
+                "meta": meta,
+                "variant": variant    
+            })
+
 
         st.session_state.generated_variants = variants
 
@@ -160,26 +176,38 @@ if st.session_state.generated_variants:
         variants = st.session_state.generated_variants
         cols = st.columns(len(variants))
 
-        for col, (name, img_out, meta) in zip(cols, variants):
+        for col, v in zip(cols, variants):
             with col:
-                st.markdown(f"**{name}**")
-                st.image(img_out, width=260)
+                st.markdown(f"**{v['name']}**")
+                st.image(v["image"], width=260)
                 st.caption(
-                    f"{meta['title_font']} | {meta['text_color']} | {meta['layout']}"
+                    f"{v['meta']['title_font']} | {v['meta']['text_color']} | {v['meta']['layout']}"
                 )
+
         st.divider()
 
-        selected_variant = st.radio(
+        selected_variant_name = st.radio(
             "Select a variant to download:",
-            [v[0] for v in variants],
+            [v["name"] for v in variants],
             key="selected_variant"
         )
+
         final_image, final_meta = None, None
 
-        for name, img_out, meta in st.session_state.generated_variants:
-            if name == st.session_state.selected_variant:
-                final_image = img_out
-                final_meta = meta
+        selected = next(
+            (v for v in variants if v["name"] == selected_variant_name),
+            None
+        )
+
+        if selected is None:
+            st.stop()
+
+
+        final_image = selected["image"]          # preview image
+        final_meta = selected["meta"]
+        selected_variant_config = selected["variant"]  # variant dict
+
+
 
         if final_image is not None:
             st.markdown("### 🧠 Design Reasoning")
@@ -216,7 +244,21 @@ if st.session_state.generated_variants:
                     file_name=filename
                 )
             
-            exports = export_for_platforms(final_image)
+            if "base_background" not in st.session_state:
+                st.error("Background image not found.")
+                st.stop()
+
+            exports = export_with_text(
+                st.session_state.base_background,
+                title,
+                subtitle,
+                title_font_path,
+                subtitle_font_path,
+                selected_variant_config
+            )
+
+
+
 
             st.subheader("Export for Social Media")
 
@@ -269,3 +311,36 @@ if st.session_state.generated_variants:
 
 else:
     st.info("No sample images found. Run the Colab notebook to generate backgrounds and place one in assets/sample_images.")
+
+# footer
+
+st.markdown(
+    """
+    <style>
+    .footer {
+        margin-top: 80px;   /* pushes footer down */
+        padding: 16px 0;
+        text-align: center;
+        color: #9ca3af;
+        font-size: 14px;
+        border-top: 1px solid #1f2937;
+    }
+    .footer a {
+        color: #7c3aed; /* purple accent */
+        text-decoration: none;
+        font-weight: 500;
+    }
+    .footer a:hover {
+        text-decoration: underline;
+    }
+    </style>
+
+    <div class="footer">
+        Designed & built by 
+        <a href="https://www.linkedin.com/in/nisha-kumari-41b69125b/" target="_blank">
+            @Nisha
+        </a>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
