@@ -2,6 +2,7 @@ from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageOps
 import json
 import os
 import re
+import numpy as np
 
 MAX_TITLE_SCALE = 0.12
 MIN_TITLE_SCALE = 0.05
@@ -107,6 +108,41 @@ def remove_emoji(text):
     return cleaned, cleaned != text
 
 
+def find_low_texture_slice(image, slice_height_ratio=0.12):
+    gray = image.convert("L")
+    arr = np.array(gray)
+
+    h, w = arr.shape
+
+    # TITLE ZONE
+    zone_top = int(h * 0.08)
+    zone_bottom = int(h * 0.55)
+
+    zone = arr[zone_top:zone_bottom, :]
+
+    slice_height = int((zone_bottom - zone_top) * slice_height_ratio)
+
+    best_score = float("inf")
+    best_y = zone_top
+
+    for y in range(0, zone.shape[0] - slice_height, slice_height):
+        slice_region = zone[y:y + slice_height, :]
+
+        # edge density using gradient magnitude
+        gy, gx = np.gradient(slice_region.astype(float))
+        edge_density = np.mean(np.sqrt(gx**2 + gy**2))
+
+        # slight bias toward upper slices
+        bias = y * 0.02
+        score = edge_density + bias
+
+        if score < best_score:
+            best_score = score
+            best_y = zone_top + y
+
+    return best_y
+
+
 def overlay_text(img, title="TITLE", subtitle="", title_font_path=None, subtitle_font_path=None, text_color="#FFFFFF", variant=None):
     if isinstance(img, str):
         img = Image.open(img)
@@ -177,7 +213,13 @@ def overlay_text(img, title="TITLE", subtitle="", title_font_path=None, subtitle
     title_lines = title_lines[:MAX_TITLE_LINES]
 
     line_spacing = int(title_size * 0.2)
-    title_y_start = max(int(h * 0.08), int(h * 0.05))
+   # Vision-aware placement
+    try:
+        detected_y = find_low_texture_slice(image)
+        title_y_start = max(int(h * 0.05), min(detected_y, int(h * 0.6)))
+    except Exception:
+        # fallback to default placement
+        title_y_start = max(int(h * 0.08), int(h * 0.05))
 
     title_positions = []
     current_y = title_y_start
